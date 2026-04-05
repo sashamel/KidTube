@@ -1,21 +1,21 @@
 {
   "pin": "2580",
   "channels": [
-    { "name": "3 Кота", "id": "UC_T5XbinlhZfQ9reWLAGjxw" },
+    { "name": "Три Кота", "id": "UC_T5XbinlhZfQ9reWLAGjxw" },
     { "name": "Барбоскины", "id": "UC2el0G8cIcOOdjlHy2KOBkQ" },
-    { "name": "КоКомелон (RU)", "id": "UC5A-Wp9ujcr5g9sYagAafEA" },
-    { "name": "Фэнтези Патруль", "id": "UC5YlTWCe5npJ_fZ6mCO6sBQ" },
+    { "name": "CoComelon на русском", "id": "UC5A-Wp9ujcr5g9sYagAafEA" },
+    { "name": "Сказочный Патруль", "id": "UC5YlTWCe5npJ_fZ6mCO6sBQ" },
     { "name": "Фиксики", "id": "UCdSaNPMpj-Vi_SF6_MAFpSw" },
     { "name": "Маша и Медведь", "id": "UCgBFmiWDbwg7Lm53vsanPLw" },
-    { "name": "Леди Баг (RU)", "id": "UCMWVhx6vBZOjeOWkGKKaxRw" },
-    { "name": "Свинка Пеппа (RU)", "id": "UCnenDeyXGv5IRYsa3QAGdhQ" },
+    { "name": "Леди Баг и Супер-Кот", "id": "UCMWVhx6vBZOjeOWkGKKaxRw" },
+    { "name": "Свинка Пеппа Русский", "id": "UCnenDeyXGv5IRYsa3QAGdhQ" },
     { "name": "Смешарики", "id": "UCRv76wLBC73jiP7LX4C3l8Q" },
-    { "name": "Томас (RU)", "id": "UCs_uv3QyUIQjBoL1Ij5BdlQ" },
+    { "name": "Томас и его друзья", "id": "UCs_uv3QyUIQjBoL1Ij5BdlQ" },
     { "name": "Мимимишки", "id": "UCT4p4B8sRyKPgraEmiIU1qg" },
-    { "name": "Хочу всё знать", "id": "UCzIPnUHNXd8ZyHz2PRLIK1A" }
+    { "name": "Хочу знать все!", "id": "UCzIPnUHNXd8ZyHz2PRLIK1A" }
   ],
   "keywords": {
-    "allowlist": ["кота", "Барбоскины", "Кокомелон", "патруль", "Фиксики", "Маша", "Леди", "Пеппа", "Смешарики", "Томас", "Мимимишки", "знать", "Винтик"],
+    "allowlist": ["кота", "Барбоскины", "Кокомелон", "Cocomelon", "патруль", "Фиксики", "Fixiki", "Маша", "Леди", "Баг", "Пеппа", "Смешарики", "Smeshariki", "Томас", "Мимимишки", "знать", "Винтик"],
     "blocklist": ["scary", "horror", "prank", "slime", "challenge", "страшно", "хоррор"]
   },
   "blockShorts": true
