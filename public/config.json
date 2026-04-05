@@ -15,7 +15,7 @@
     { "name": "Хочу всё знать", "id": "UCzIPnUHNXd8ZyHz2PRLIK1A" }
   ],
   "keywords": {
-    "allowlist": [],
+    "allowlist": ["кота", "Барбоскины", "Кокомелон", "патруль", "Фиксики", "Маша", "Леди", "Пеппа", "Смешарики", "Томас", "Мимимишки", "знать", "Винтик"],
     "blocklist": ["scary", "horror", "prank", "slime", "challenge", "страшно", "хоррор"]
   },
   "blockShorts": true
