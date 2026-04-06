@@ -1,5 +1,5 @@
 {
-  "name": "KidTube",
+  "name": "KidTube for Mishka",
   "short_name": "KidTube",
   "description": "Safe YouTube for kids",
   "start_url": "/",
@@ -9,14 +9,16 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KICA8cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjEwMCIgZmlsbD0iI2Y1YTYyMyIvPgogIDwhLS0gZWFycyAtLT4KICA8Y2lyY2xlIGN4PSIxNTUiIGN5PSIxNjAiIHI9IjYyIiBmaWxsPSIjYzQ3ZDEwIi8+CiAgPGNpcmNsZSBjeD0iMzU3IiBjeT0iMTYwIiByPSI2MiIgZmlsbD0iI2M0N2QxMCIvPgogIDxjaXJjbGUgY3g9IjE1NSIgY3k9IjE2MCIgcj0iMzgiIGZpbGw9IiNlODk0M2EiLz4KICA8Y2lyY2xlIGN4PSIzNTciIGN5PSIxNjAiIHI9IjM4IiBmaWxsPSIjZTg5NDNhIi8+CiAgPCEtLSBoZWFkIC0tPgogIDxlbGxpcHNlIGN4PSIyNTYiIGN5PSIyMzAiIHJ4PSIxNDAiIHJ5PSIxMjgiIGZpbGw9IiNlODk0M2EiLz4KICA8IS0tIGJvZHkgLS0+CiAgPGVsbGlwc2UgY3g9IjI1NiIgY3k9IjM5MCIgcng9IjExMCIgcnk9IjEwMCIgZmlsbD0iI2M0N2QxMCIvPgogIDwhLS0gYmVsbHkgLS0+CiAgPGVsbGlwc2UgY3g9IjI1NiIgY3k9IjM5NSIgcng9IjcwIiByeT0iNjUiIGZpbGw9IiNlODk0M2EiLz4KICA8IS0tIGFybXMgLS0+CiAgPGVsbGlwc2UgY3g9IjE0MCIgY3k9IjM5MCIgcng9IjQyIiByeT0iNzAiIGZpbGw9IiNjNDdkMTAiIHRyYW5zZm9ybT0icm90YXRlKC0xNSAxNDAgMzkwKSIvPgogIDxlbGxpcHNlIGN4PSIzNzIiIGN5PSIzOTAiIHJ4PSI0MiIgcnk9IjcwIiBmaWxsPSIjYzQ3ZDEwIiB0cmFuc2Zvcm09InJvdGF0ZSgxNSAzNzIgMzkwKSIvPgogIDwhLS0gbGVncyAtLT4KICA8ZWxsaXBzZSBjeD0iMTk1IiBjeT0iNDcwIiByeD0iNDAiIHJ5PSIyOCIgZmlsbD0iI2M0N2QxMCIvPgogIDxlbGxpcHNlIGN4PSIzMTciIGN5PSI0NzAiIHJ4PSI0MCIgcnk9IjI4IiBmaWxsPSIjYzQ3ZDEwIi8+CiAgPCEtLSBzbm91dCAtLT4KICA8ZWxsaXBzZSBjeD0iMjU2IiBjeT0iMjY4IiByeD0iNTUiIHJ5PSI0NCIgZmlsbD0iI2M0N2QxMCIvPgogIDwhLS0gbm9zZSAtLT4KICA8ZWxsaXBzZSBjeD0iMjU2IiBjeT0iMjUyIiByeD0iMjIiIHJ5PSIxNCIgZmlsbD0iIzNkMWYwMCIvPgogIDwhLS0gbW91dGggLS0+CiAgPHBhdGggZD0iTTIzOCAyNzIgUTI1NiAyOTIgMjc0IDI3MiIgc3Ryb2tlPSIjM2QxZjAwIiBzdHJva2Utd2lkdGg9IjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDwhLS0gZXllcyAtLT4KICA8Y2lyY2xlIGN4PSIyMTIiIGN5PSIyMTAiIHI9IjIwIiBmaWxsPSIjZmZmIi8+CiAgPGNpcmNsZSBjeD0iMzAwIiBjeT0iMjEwIiByPSIyMCIgZmlsbD0iI2ZmZiIvPgogIDxjaXJjbGUgY3g9IjIxNiIgY3k9IjIxMyIgcj0iMTIiIGZpbGw9IiMzZDFmMDAiLz4KICA8Y2lyY2xlIGN4PSIzMDQiIGN5PSIyMTMiIHI9IjEyIiBmaWxsPSIjM2QxZjAwIi8+CiAgPGNpcmNsZSBjeD0iMjIwIiBjeT0iMjA5IiByPSI0IiBmaWxsPSIjZmZmIi8+CiAgPGNpcmNsZSBjeD0iMzA4IiBjeT0iMjA5IiByPSI0IiBmaWxsPSIjZmZmIi8+Cjwvc3ZnPg==",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     },
     {
-      "src": "icon-512.png",
+      "src": "icon.svg",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }

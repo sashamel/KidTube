@@ -6,6 +6,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen" />
+  <meta name="theme-color" content="#0f1923" />
   <title>KidTube</title>
   <link rel="manifest" href="manifest.json" />
   <style>
@@ -330,6 +331,8 @@
       z-index: 10;
     }
     .ov       { pointer-events: all; }   /* blocks taps */
+    /* When overlay is disabled by parent, clear cells also block nothing */
+    #player-overlay.disabled { display: none; }
     .ov-clear { pointer-events: none; }  /* passes taps through */
 
     #player-footer {
@@ -515,7 +518,7 @@
 <!-- HEADER -->
 <div id="header">
   <button id="back-btn" onclick="goBack()">&#8592;</button>
-  <div id="logo">🎬 KidTube for Mishka NamNam 🧸</div>
+  <div id="logo">🎬 KidTube</div>  <!-- updated from config.appName on load -->
   <button id="search-toggle" onclick="toggleSearch()" title="Search">🔍</button>
   <button id="settings-btn" onclick="openSettings()" title="Parent settings">⚙️</button>
 </div>
@@ -604,6 +607,15 @@
     <h2>⚙️ Parent Settings</h2>
 
     <div class="settings-section">
+      <h3>Player Overlay</h3>
+      <div class="info-row">The overlay blocks YouTube's buttons inside the player, preventing the child from tapping out of the app. Disable it temporarily if you need to scroll or interact with the player normally.</div>
+      <button id="overlay-toggle-btn" onclick="toggleOverlay()"
+        style="margin-top:10px; width:100%; padding:11px; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; background:var(--surface2); color:var(--text);">
+        Loading…
+      </button>
+    </div>
+
+    <div class="settings-section">
       <h3>Reported / Blocked Videos</h3>
       <div id="blacklist-list"><div class="info-row">No reported videos yet.</div></div>
     </div>
@@ -665,6 +677,8 @@ async function init() {
     return;
   }
   loadYouTubeIframeAPI();
+  applyOverlaySetting();
+  document.getElementById('logo').textContent = config.appName || '🎬 KidTube';
   renderChannelGrid();
 }
 
@@ -710,8 +724,9 @@ function uploadsPlaylistId(channelId) {
  */
 async function fetchChannelVideos(channelId, maxResults = 30) {
   const playlistId = uploadsPlaylistId(channelId);
+  // Step 1: get video IDs + snippets from the uploads playlist (1 quota unit)
   const url = `https://www.googleapis.com/youtube/v3/playlistItems`
-    + `?part=snippet&playlistId=${playlistId}&maxResults=${maxResults}&key=${API_KEY}`;
+    + `?part=snippet&playlistId=${playlistId}&maxResults=50&key=${API_KEY}`;
 
   const res = await fetch(url);
   const data = await res.json();
@@ -721,7 +736,8 @@ async function fetchChannelVideos(channelId, maxResults = 30) {
     return [];
   }
 
-  const items = (data.items || [])
+  // Basic filtering before the embeddable check
+  let items = (data.items || [])
     .map(item => ({
       videoId: item.snippet?.resourceId?.videoId || '',
       title:   item.snippet?.title || '',
@@ -735,12 +751,32 @@ async function fetchChannelVideos(channelId, maxResults = 30) {
         const t = v.title.toLowerCase();
         if (t.includes('#shorts') || t.includes('shorts')) return false;
       }
-      // Skip YouTube's "Deleted video" / "Private video" placeholders
       if (v.title === 'Deleted video' || v.title === 'Private video') return false;
       return true;
     });
 
-  // Shuffle so it's not always the most-recently-uploaded order
+  // Step 2: filter to only embeddable videos using videos?part=status
+  // Batch all IDs in one call (1 quota unit regardless of count)
+  if (items.length > 0) {
+    const ids = items.map(v => v.videoId).join(',');
+    try {
+      const statusRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=status&id=${ids}&key=${API_KEY}`
+      );
+      const statusData = await statusRes.json();
+      const embeddable = new Set(
+        (statusData.items || [])
+          .filter(v => v.status?.embeddable === true)
+          .map(v => v.id)
+      );
+      items = items.filter(v => embeddable.has(v.videoId));
+    } catch (e) {
+      console.warn('Embeddable check failed, skipping filter:', e.message);
+      // Non-fatal: proceed without the filter
+    }
+  }
+
+  // Shuffle so it's not always newest-first
   return shuffle(items).slice(0, maxResults);
 }
 
@@ -934,7 +970,7 @@ function playVideo(videoId, title, playlistIndex = -1) {
   document.getElementById('player-title').textContent = title;
   showView('player');
   document.getElementById('back-btn').classList.add('visible');
-  document.getElementById('logo').textContent = '🎬 KidTube for Mishka NamNam 🧸';
+  document.getElementById('logo').textContent = config?.appName || '🎬 KidTube';
 
   // Reset the player target div without touching the overlay
   const target = document.getElementById('yt-player-target');
@@ -1051,7 +1087,7 @@ function goHome() {
   currentPlaylistIndex = -1;
   showView('home');
   document.getElementById('back-btn').classList.remove('visible');
-  document.getElementById('logo').textContent = '🎬 KidTube for Mishka NamNam 🧸';
+  document.getElementById('logo').textContent = config?.appName || '🎬 KidTube';
   document.getElementById('search-bar').classList.remove('visible');
 }
 
@@ -1114,10 +1150,37 @@ function closePinModal() {
 // ═══════════════════════════════════════════════
 //  SETTINGS MODAL
 // ═══════════════════════════════════════════════
+function overlayEnabled() {
+  try { return localStorage.getItem('kidtube_overlay') !== 'off'; }
+  catch { return true; }
+}
+
+function toggleOverlay() {
+  const nowEnabled = overlayEnabled();
+  try { localStorage.setItem('kidtube_overlay', nowEnabled ? 'off' : 'on'); } catch {}
+  applyOverlaySetting();
+  updateOverlayBtn();
+}
+
+function applyOverlaySetting() {
+  const el = document.getElementById('player-overlay');
+  if (el) el.classList.toggle('disabled', !overlayEnabled());
+}
+
+function updateOverlayBtn() {
+  const btn = document.getElementById('overlay-toggle-btn');
+  if (!btn) return;
+  const on = overlayEnabled();
+  btn.textContent = on ? '🛡️ Overlay ON — tap to disable' : '🔓 Overlay OFF — tap to enable';
+  btn.style.background = on ? 'var(--accent)' : 'var(--surface2)';
+  btn.style.color = on ? '#000' : 'var(--text)';
+}
+
 function openSettings() {
   requirePin(() => {
     renderBlacklist();
     document.getElementById('blacklist-count').textContent = blacklist.length;
+    updateOverlayBtn();
     document.getElementById('settings-modal').classList.add('open');
   });
 }

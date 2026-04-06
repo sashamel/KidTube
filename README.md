@@ -143,3 +143,39 @@ Now every reported video also logs to your Google Sheet. Periodically, you can c
 | API quota exceeded | You get 10,000 units/day free. Each channel load costs ~12–15 units. Should be fine for daily use. |
 | Video plays with YouTube recommendations visible | The embed uses `rel=0` to minimise this. YouTube may still show same-channel suggestions at the end — this is a YouTube limitation on embeds. |
 | "Add to Home Screen" not appearing | Make sure you're in Chrome (not Firefox or Samsung Browser) and navigating to the https:// URL |
+
+---
+
+## Blocking Ads with DNS filtering
+
+YouTube's embedded player shows ads on monetised videos. The cleanest free solution is to set the tablet's DNS to a service that blocks ad-serving domains at the network level, before they even reach the browser.
+
+### Recommended: AdGuard DNS (free, no account needed)
+
+1. On the tablet, go to **Settings → Wi-Fi**
+2. Long-press your Wi-Fi network → **Modify network** (or tap the ⚙️ gear icon)
+3. Set **IP settings** to **Static** (so the DNS setting sticks)
+4. Set **DNS 1** to `94.140.14.14`
+5. Set **DNS 2** to `94.140.15.15`
+6. Save
+
+That's it. AdGuard DNS blocks ad and tracking domains for everything on that Wi-Fi network — YouTube ads, in-app ads, website ads.
+
+**Alternative: NextDNS** (free tier: 300,000 queries/month, more control)
+- Go to [nextdns.io](https://nextdns.io), create a free account
+- You get a custom DNS address and a dashboard where you can see/block specific domains
+- Set it the same way as above
+
+### For near-100% ad blocking: Firefox + uBlock Origin
+
+Chrome on Android doesn't support extensions, but Firefox does:
+1. Install **Firefox for Android** from the Play Store
+2. Open Firefox → tap the three-dot menu → **Add-ons** → install **uBlock Origin**
+3. Navigate to your KidTube URL in Firefox
+4. Tap the three-dot menu → **Add to Home Screen**
+
+The KidTube app icon will now launch from Firefox instead of Chrome — it looks and works identically, but uBlock Origin silently removes ads before they render.
+
+### YouTube Premium
+
+If you have (or are considering) YouTube Premium, it removes ads everywhere including embedded players. Just sign the tablet into that Google account in Firefox or Chrome — but remember to use a separate browser profile or incognito mode to avoid mixing watch history with your own account.
