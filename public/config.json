@@ -1,5 +1,7 @@
 {
+  "apiKey": "AIzaSyDr5GFpElyd9ZlvYkGjBMqvAQYMSnch8m0",
   "pin": "2580",
+  "blacklistSheetUrl": "",
   "channels": [
     { "name": "Три Кота", "id": "UC_T5XbinlhZfQ9reWLAGjxw" },
     { "name": "Барбоскины", "id": "UC2el0G8cIcOOdjlHy2KOBkQ" },

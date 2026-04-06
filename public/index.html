@@ -582,114 +582,190 @@
 </div>
 
 <script>
-// ─────────────────────────────────────────────
-//  CONFIG & CONSTANTS
-// ─────────────────────────────────────────────
-const API_KEY = 'AIzaSyDr5GFpElyd9ZlvYkGjBMqvAQYMSnch8m0';
-const CONFIG_URL = './config.json';        // served from same GitHub Pages / Netlify deploy
-const BLACKLIST_SHEET_URL = '';            // optional: Google Apps Script web app URL (see README)
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+const CONFIG_URL = './config.json';
 
-let config = null;
-let blacklist = [];         // array of videoId strings
-let currentView = 'home';   // 'home' | 'channel' | 'search' | 'player'
+let config = null;           // loaded from config.json
+let API_KEY = '';            // pulled from config.apiKey
+let blacklist = [];          // videoId strings, stored in localStorage
+let currentView = 'home';    // 'home' | 'channel' | 'search' | 'player'
 let prevView = 'home';
 let currentChannelId = null;
+let currentChannelName = '';
 let currentVideoId = null;
 let currentVideoTitle = null;
+let currentPlaylist = [];    // video list for the active channel/search view
+let currentPlaylistIndex = -1;
 let pinCallback = null;
 let pinBuffer = '';
 
-// ─────────────────────────────────────────────
+// YouTube IFrame Player (for autoplay-next)
+let ytPlayer = null;
+let ytApiReady = false;
+
+// ═══════════════════════════════════════════════
 //  INIT
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 async function init() {
   blacklist = loadLocalBlacklist();
   try {
     const res = await fetch(CONFIG_URL + '?cb=' + Date.now());
     config = await res.json();
+    API_KEY = config.apiKey || '';
     document.getElementById('config-source').textContent = CONFIG_URL;
   } catch (e) {
-    showError('Could not load config.json');
+    showHomeError('Could not load config.json: ' + e.message);
     return;
   }
+  if (!API_KEY) {
+    showHomeError('No apiKey found in config.json');
+    return;
+  }
+  loadYouTubeIframeAPI();
   renderChannelGrid();
 }
 
-// ─────────────────────────────────────────────
-//  BLACKLIST (localStorage)
-// ─────────────────────────────────────────────
+// Load YouTube IFrame API script (needed for onStateChange / autoplay-next)
+function loadYouTubeIframeAPI() {
+  const tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+}
+
+// Called automatically by the YT IFrame API script once loaded
+function onYouTubeIframeAPIReady() {
+  ytApiReady = true;
+}
+
+// ═══════════════════════════════════════════════
+//  BLACKLIST  (localStorage)
+// ═══════════════════════════════════════════════
 function loadLocalBlacklist() {
   try { return JSON.parse(localStorage.getItem('kidtube_blacklist') || '[]'); }
   catch { return []; }
 }
-
 function saveLocalBlacklist() {
   localStorage.setItem('kidtube_blacklist', JSON.stringify(blacklist));
 }
 
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
+//  API HELPERS
+// ═══════════════════════════════════════════════
+
+/**
+ * Convert a channel ID like "UCxxxxxx" to its uploads playlist ID "UUxxxxxx".
+ * This is a free, reliable trick — no extra API call needed.
+ */
+function uploadsPlaylistId(channelId) {
+  return 'UU' + channelId.slice(2);
+}
+
+/**
+ * Fetch up to `maxResults` videos from a channel's uploads playlist.
+ * Uses playlistItems (1 unit/call) instead of search (100 units/call).
+ * Returns array of { videoId, title, thumb } — already filtered.
+ */
+async function fetchChannelVideos(channelId, maxResults = 30) {
+  const playlistId = uploadsPlaylistId(channelId);
+  const url = `https://www.googleapis.com/youtube/v3/playlistItems`
+    + `?part=snippet&playlistId=${playlistId}&maxResults=${maxResults}&key=${API_KEY}`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (data.error) {
+    console.warn('playlistItems error:', data.error.message);
+    return [];
+  }
+
+  const items = (data.items || [])
+    .map(item => ({
+      videoId: item.snippet?.resourceId?.videoId || '',
+      title:   item.snippet?.title || '',
+      thumb:   item.snippet?.thumbnails?.medium?.url
+            || item.snippet?.thumbnails?.default?.url || '',
+    }))
+    .filter(v => {
+      if (!v.videoId) return false;
+      if (blacklist.includes(v.videoId)) return false;
+      if (config.blockShorts) {
+        const t = v.title.toLowerCase();
+        if (t.includes('#shorts') || t.includes('shorts')) return false;
+      }
+      // Skip YouTube's "Deleted video" / "Private video" placeholders
+      if (v.title === 'Deleted video' || v.title === 'Private video') return false;
+      return true;
+    });
+
+  // Shuffle so it's not always the most-recently-uploaded order
+  return shuffle(items).slice(0, maxResults);
+}
+
+/** Fisher-Yates shuffle */
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ═══════════════════════════════════════════════
 //  HOME: CHANNEL GRID
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 async function renderChannelGrid() {
   const grid = document.getElementById('channels-grid');
   grid.innerHTML = '<div class="spinner">⏳</div>';
 
+  // Fetch channel metadata (thumbnails, official names) — 1 call for all 12
   const channelIds = config.channels.map(c => c.id).join(',');
-  const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&id=${channelIds}&key=${API_KEY}`;
+  const url = `https://www.googleapis.com/youtube/v3/channels`
+    + `?part=snippet&id=${channelIds}&key=${API_KEY}`;
 
   let channelData = {};
   try {
     const res = await fetch(url);
     const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
     (data.items || []).forEach(item => { channelData[item.id] = item; });
   } catch (e) {
-    // fall through; we'll still render cards with fallback
+    showHomeError('YouTube API error: ' + e.message
+      + '\n\nCheck that the API key in config.json is correct and that the YouTube Data API v3 is enabled in Google Cloud Console.');
+    return;
   }
 
-  // Also fetch one representative video per channel
-  const videoPromises = config.channels.map(ch => fetchChannelFeaturedVideo(ch.id));
-  const videos = await Promise.all(videoPromises);
-
   grid.innerHTML = '';
-  config.channels.forEach((ch, i) => {
+  config.channels.forEach(ch => {
     const info = channelData[ch.id];
-    const thumb = info?.snippet?.thumbnails?.medium?.url || '';
-    const video = videos[i];
-    const thumbUrl = video?.thumb || thumb;
+    // Prefer high-res channel avatar from API; fall back to nothing
+    const thumbUrl = info?.snippet?.thumbnails?.medium?.url
+                  || info?.snippet?.thumbnails?.default?.url || '';
     const label = ch.name || info?.snippet?.title || 'Channel';
 
     const card = document.createElement('div');
     card.className = 'channel-card';
     card.onclick = () => openChannel(ch.id, label);
-    card.innerHTML = thumbUrl
-      ? `<img class="channel-thumb" src="${thumbUrl}" alt="${label}" loading="lazy" />`
-      : `<div class="thumb-placeholder">📺</div>`;
-    card.innerHTML += `<div class="channel-label">${label}</div>`;
+    if (thumbUrl) {
+      card.innerHTML = `<img class="channel-thumb" src="${thumbUrl}" alt="${escHtml(label)}" loading="lazy" />`;
+    } else {
+      card.innerHTML = `<div class="thumb-placeholder">📺</div>`;
+    }
+    card.innerHTML += `<div class="channel-label">${escHtml(label)}</div>`;
     grid.appendChild(card);
   });
 }
 
-async function fetchChannelFeaturedVideo(channelId) {
-  try {
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=viewCount&maxResults=1&type=video&key=${API_KEY}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    const item = (data.items || [])[0];
-    if (!item) return null;
-    return {
-      id: item.id.videoId,
-      thumb: item.snippet.thumbnails?.medium?.url
-    };
-  } catch { return null; }
-}
-
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 //  CHANNEL VIEW
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 async function openChannel(channelId, channelName) {
   prevView = currentView;
   currentView = 'channel';
   currentChannelId = channelId;
+  currentChannelName = channelName;
   showView('channel');
   document.getElementById('channel-view-title').textContent = channelName;
   document.getElementById('logo').textContent = '🎬 ' + channelName;
@@ -698,67 +774,52 @@ async function openChannel(channelId, channelName) {
   const grid = document.getElementById('videos-grid');
   grid.innerHTML = '<div class="spinner">⏳</div>';
 
-  const items = await fetchChannelVideos(channelId, 24);
+  let items = [];
+  try {
+    items = await fetchChannelVideos(channelId, 30);
+  } catch(e) {
+    grid.innerHTML = `<div class="empty-msg">Error loading videos: ${escHtml(e.message)}</div>`;
+    return;
+  }
+
+  currentPlaylist = items;
   renderVideoGrid(grid, items);
 }
 
-async function fetchChannelVideos(channelId, maxResults = 24) {
-  try {
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=viewCount&maxResults=${maxResults}&type=video&key=${API_KEY}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    const items = (data.items || []).filter(item => {
-      const vid = item.id?.videoId || '';
-      // Filter out Shorts (duration check would need extra call; filter by blacklist)
-      if (blacklist.includes(vid)) return false;
-      if (config.blockShorts) {
-        const title = (item.snippet?.title || '').toLowerCase();
-        if (title.includes('#shorts') || title.includes('shorts')) return false;
-      }
-      return true;
-    });
-    return items;
-  } catch { return []; }
-}
-
+// ═══════════════════════════════════════════════
+//  VIDEO GRID RENDERER
+// ═══════════════════════════════════════════════
 function renderVideoGrid(container, items) {
   container.innerHTML = '';
   if (!items.length) {
     container.innerHTML = '<div class="empty-msg">No videos found.</div>';
     return;
   }
-  items.forEach(item => {
-    const vid = item.id?.videoId || item.id;
-    const snippet = item.snippet;
-    const thumb = snippet?.thumbnails?.medium?.url || '';
-    const title = snippet?.title || '';
-    const views = snippet?.viewCount ? formatViews(snippet.viewCount) : '';
-
+  items.forEach((item, index) => {
     const card = document.createElement('div');
     card.className = 'video-card';
-    card.onclick = () => playVideo(vid, title);
+    card.onclick = () => playVideo(item.videoId, item.title, index);
     card.innerHTML = `
       <div class="video-thumb-wrap">
-        <img class="video-thumb" src="${thumb}" alt="${title}" loading="lazy" />
+        ${item.thumb
+          ? `<img class="video-thumb" src="${escHtml(item.thumb)}" alt="${escHtml(item.title)}" loading="lazy" />`
+          : `<div class="thumb-placeholder" style="aspect-ratio:16/9">📺</div>`}
         <div class="play-icon">▶️</div>
       </div>
       <div class="video-info">
-        <div class="video-title">${escHtml(title)}</div>
-        ${views ? `<div class="video-views">${views} views</div>` : ''}
+        <div class="video-title">${escHtml(item.title)}</div>
       </div>`;
     container.appendChild(card);
   });
 }
 
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 //  SEARCH
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 function toggleSearch() {
   const bar = document.getElementById('search-bar');
   bar.classList.toggle('visible');
-  if (bar.classList.contains('visible')) {
-    document.getElementById('search-input').focus();
-  }
+  if (bar.classList.contains('visible')) document.getElementById('search-input').focus();
 }
 
 async function doSearch() {
@@ -776,25 +837,34 @@ async function doSearch() {
   grid.innerHTML = '<div class="spinner">⏳</div>';
 
   try {
-    const allowedChannels = config.channels.map(c => c.id);
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=50&key=${API_KEY}`;
+    const url = `https://www.googleapis.com/youtube/v3/search`
+      + `?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=50&key=${API_KEY}`;
     const res = await fetch(url);
     const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
 
     const kw = config.keywords || {};
-    const allowlist = (kw.allowlist || []).map(w => w.toLowerCase());
-    const blocklist_kw = (kw.blocklist || []).map(w => w.toLowerCase());
+    const allowlist   = (kw.allowlist || []).map(w => w.toLowerCase());
+    const blocklistKw = (kw.blocklist || []).map(w => w.toLowerCase());
 
-    const items = (data.items || []).filter(item => {
-      const vid = item.id?.videoId || '';
-      if (blacklist.includes(vid)) return false;
-      const title = (item.snippet?.title || '').toLowerCase();
-      if (config.blockShorts && (title.includes('#shorts') || title.includes('shorts'))) return false;
-      if (blocklist_kw.some(w => title.includes(w))) return false;
-      if (allowlist.length && !allowlist.some(w => title.includes(w))) return false;
-      return true;
-    });
+    const items = (data.items || [])
+      .filter(item => {
+        const vid = item.id?.videoId || '';
+        if (!vid) return false;
+        if (blacklist.includes(vid)) return false;
+        const title = (item.snippet?.title || '').toLowerCase();
+        if (config.blockShorts && (title.includes('#shorts') || title.includes('shorts'))) return false;
+        if (blocklistKw.some(w => title.includes(w))) return false;
+        if (allowlist.length && !allowlist.some(w => title.includes(w))) return false;
+        return true;
+      })
+      .map(item => ({
+        videoId: item.id.videoId,
+        title:   item.snippet?.title || '',
+        thumb:   item.snippet?.thumbnails?.medium?.url || '',
+      }));
 
+    currentPlaylist = items;
     grid.innerHTML = '';
     if (!items.length) {
       grid.innerHTML = '<div class="empty-msg">No results passed the safety filters.</div>';
@@ -802,7 +872,7 @@ async function doSearch() {
       renderVideoGrid(grid, items);
     }
   } catch (e) {
-    grid.innerHTML = '<div class="empty-msg">Search failed. Check API key.</div>';
+    grid.innerHTML = `<div class="empty-msg">Search failed: ${escHtml(e.message)}</div>`;
   }
 }
 
@@ -810,31 +880,83 @@ document.getElementById('search-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') doSearch();
 });
 
-// ─────────────────────────────────────────────
-//  PLAYER
-// ─────────────────────────────────────────────
-function playVideo(videoId, title) {
+// ═══════════════════════════════════════════════
+//  PLAYER  (YouTube IFrame API for autoplay-next)
+// ═══════════════════════════════════════════════
+function playVideo(videoId, title, playlistIndex = -1) {
   prevView = currentView;
   currentView = 'player';
   currentVideoId = videoId;
   currentVideoTitle = title;
+  currentPlaylistIndex = playlistIndex;
 
   document.getElementById('player-title').textContent = title;
-  document.getElementById('player-container').innerHTML = `
-    <iframe
-      src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&fs=1&playsinline=0"
-      allow="autoplay; fullscreen"
-      allowfullscreen
-    ></iframe>`;
-
   showView('player');
   document.getElementById('back-btn').classList.add('visible');
   document.getElementById('logo').textContent = '🎬 KidTube';
+
+  const container = document.getElementById('player-container');
+  container.innerHTML = '<div id="yt-player-target"></div>';
+
+  if (ytApiReady && window.YT) {
+    createYTPlayer(videoId);
+  } else {
+    // API not ready yet — fall back to plain iframe, retry player creation
+    container.innerHTML = `
+      <iframe id="yt-iframe-fallback"
+        src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3"
+        allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+    // Keep polling until API is ready, then switch to proper player
+    const poll = setInterval(() => {
+      if (ytApiReady && window.YT && currentView === 'player' && currentVideoId === videoId) {
+        clearInterval(poll);
+        container.innerHTML = '<div id="yt-player-target"></div>';
+        createYTPlayer(videoId);
+      }
+    }, 300);
+  }
 }
 
-// ─────────────────────────────────────────────
+function createYTPlayer(videoId) {
+  if (ytPlayer) {
+    try { ytPlayer.destroy(); } catch {}
+    ytPlayer = null;
+  }
+  ytPlayer = new YT.Player('yt-player-target', {
+    videoId,
+    playerVars: {
+      autoplay: 1,
+      rel: 0,
+      modestbranding: 1,
+      iv_load_policy: 3,
+      fs: 1,
+      playsinline: 0,
+    },
+    events: {
+      onStateChange: onPlayerStateChange,
+    }
+  });
+}
+
+function onPlayerStateChange(event) {
+  // YT.PlayerState.ENDED === 0
+  if (event.data === 0) {
+    playNextVideo();
+  }
+}
+
+function playNextVideo() {
+  if (!currentPlaylist.length) return;
+  const nextIndex = (currentPlaylistIndex + 1) % currentPlaylist.length;
+  const next = currentPlaylist[nextIndex];
+  if (next) {
+    playVideo(next.videoId, next.title, nextIndex);
+  }
+}
+
+// ═══════════════════════════════════════════════
 //  REPORT / BLACKLIST
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 function reportVideo() {
   requirePin(() => {
     if (!currentVideoId) return;
@@ -843,32 +965,37 @@ function reportVideo() {
       saveLocalBlacklist();
       submitToSheet(currentVideoId, currentVideoTitle);
     }
-    alert('Video reported and blocked. You can also add its ID to config.json for a permanent block.\n\nVideo ID: ' + currentVideoId);
+    alert('Video reported and blocked.\n\nVideo ID (copy this into config.json to block permanently):\n' + currentVideoId);
   });
 }
 
 async function submitToSheet(videoId, title) {
-  if (!BLACKLIST_SHEET_URL) return;
+  const sheetUrl = config.blacklistSheetUrl || '';
+  if (!sheetUrl) return;
   try {
-    await fetch(BLACKLIST_SHEET_URL + `?videoId=${encodeURIComponent(videoId)}&title=${encodeURIComponent(title || '')}`, { method: 'GET', mode: 'no-cors' });
+    await fetch(sheetUrl + `?videoId=${encodeURIComponent(videoId)}&title=${encodeURIComponent(title || '')}`,
+      { method: 'GET', mode: 'no-cors' });
   } catch {}
 }
 
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 //  NAVIGATION
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 function goBack() {
   if (currentView === 'player') {
+    if (ytPlayer) { try { ytPlayer.stopVideo(); ytPlayer.destroy(); } catch {} ytPlayer = null; }
     document.getElementById('player-container').innerHTML = '';
     currentVideoId = null;
-    if (prevView === 'channel' || prevView === 'search') {
-      currentView = prevView;
-      showView(prevView);
-    } else {
+    const target = (prevView === 'channel' || prevView === 'search') ? prevView : 'home';
+    currentView = target;
+    if (target === 'home') {
       goHome();
+    } else {
+      showView(target);
+      document.getElementById('back-btn').classList.add('visible');
+      document.getElementById('logo').textContent =
+        target === 'channel' ? ('🎬 ' + currentChannelName) : '🔍 Search';
     }
-  } else if (currentView === 'channel' || currentView === 'search') {
-    goHome();
   } else {
     goHome();
   }
@@ -876,6 +1003,8 @@ function goBack() {
 
 function goHome() {
   currentView = 'home';
+  currentPlaylist = [];
+  currentPlaylistIndex = -1;
   showView('home');
   document.getElementById('back-btn').classList.remove('visible');
   document.getElementById('logo').textContent = '🎬 KidTube';
@@ -883,29 +1012,23 @@ function goHome() {
 }
 
 function showView(name) {
-  // Hide all content areas
-  document.getElementById('home-view').style.display = 'none';
+  document.getElementById('home-view').style.display    = 'none';
   document.getElementById('channel-view').style.display = 'none';
-  document.getElementById('search-view').style.display = 'none';
-  document.getElementById('player-view').style.display = 'none';
-  document.getElementById('main').style.display = 'flex';
-  document.getElementById('main').style.flexDirection = 'column';
+  document.getElementById('search-view').style.display  = 'none';
+  document.getElementById('player-view').style.display  = 'none';
+  document.getElementById('main').style.display         = 'flex';
 
   if (name === 'player') {
-    document.getElementById('main').style.display = 'none';
+    document.getElementById('main').style.display      = 'none';
     document.getElementById('player-view').style.display = 'flex';
-  } else if (name === 'home') {
-    document.getElementById('home-view').style.display = 'block';
-  } else if (name === 'channel') {
-    document.getElementById('channel-view').style.display = 'block';
-  } else if (name === 'search') {
-    document.getElementById('search-view').style.display = 'block';
-  }
+  } else if (name === 'home')    { document.getElementById('home-view').style.display    = 'block'; }
+  else if (name === 'channel')   { document.getElementById('channel-view').style.display = 'block'; }
+  else if (name === 'search')    { document.getElementById('search-view').style.display  = 'block'; }
 }
 
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 //  PIN MODAL
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 function requirePin(callback) {
   pinCallback = callback;
   pinBuffer = '';
@@ -915,19 +1038,14 @@ function requirePin(callback) {
 }
 
 function pinKey(key) {
-  if (key === '←') {
-    pinBuffer = pinBuffer.slice(0, -1);
-  } else if (pinBuffer.length < 4) {
-    pinBuffer += key;
-  }
+  if (key === '←') { pinBuffer = pinBuffer.slice(0, -1); }
+  else if (pinBuffer.length < 4) { pinBuffer += key; }
   updatePinDots();
-  if (pinBuffer.length === 4) {
-    setTimeout(checkPin, 200);
-  }
+  if (pinBuffer.length === 4) setTimeout(checkPin, 200);
 }
 
 function checkPin() {
-  if (pinBuffer === String(config?.pin || '1234')) {
+  if (pinBuffer === String(config?.pin || '0000')) {
     closePinModal();
     if (pinCallback) { pinCallback(); pinCallback = null; }
   } else {
@@ -949,9 +1067,9 @@ function closePinModal() {
   pinCallback = null;
 }
 
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 //  SETTINGS MODAL
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 function openSettings() {
   requirePin(() => {
     renderBlacklist();
@@ -972,7 +1090,7 @@ function renderBlacklist() {
   }
   container.innerHTML = blacklist.map((id, i) => `
     <div class="blacklist-item">
-      <span>${id}</span>
+      <span>${escHtml(id)}</span>
       <button class="blacklist-remove" onclick="removeBlacklist(${i})">✕</button>
     </div>`).join('');
 }
@@ -984,28 +1102,23 @@ function removeBlacklist(index) {
   document.getElementById('blacklist-count').textContent = blacklist.length;
 }
 
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 //  UTILS
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 function escHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function formatViews(n) {
-  n = parseInt(n, 10);
-  if (isNaN(n)) return '';
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(0) + 'K';
-  return n;
+function showHomeError(msg) {
+  document.getElementById('channels-grid').innerHTML =
+    `<div class="empty-msg" style="grid-column:1/-1; white-space:pre-wrap;">${escHtml(msg)}</div>`;
 }
 
-function showError(msg) {
-  document.getElementById('channels-grid').innerHTML = `<div class="empty-msg" style="grid-column:1/-1">${msg}</div>`;
-}
-
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 //  START
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════
 init();
 </script>
 </body>
