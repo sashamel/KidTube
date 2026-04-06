@@ -293,13 +293,20 @@
       position: relative;
     }
 
-    #player-container iframe,
-    #player-container > div {
+    #player-container iframe {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
       border: none;
+    }
+
+    /* The permanent player target fills the container; overlay sits above it */
+    #yt-player-target {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
     }
 
     /*
@@ -548,6 +555,9 @@
 <div id="player-view">
   <div id="player-container">
     <!-- 9-cell grid overlay: blocks YouTube chrome, lets centre through -->
+    <!-- persistent player target — YT API replaces this with an iframe -->
+    <div id="yt-player-target"></div>
+    <!-- overlay stays on top always -->
     <div id="player-overlay">
       <div class="ov"></div><div class="ov"></div><div class="ov"></div>
       <div class="ov"></div><div class="ov-clear"></div><div class="ov"></div>
@@ -926,22 +936,25 @@ function playVideo(videoId, title, playlistIndex = -1) {
   document.getElementById('back-btn').classList.add('visible');
   document.getElementById('logo').textContent = '🎬 KidTube';
 
-  const container = document.getElementById('player-container');
-  container.innerHTML = '<div id="yt-player-target"></div>';
+  // Reset the player target div without touching the overlay
+  const target = document.getElementById('yt-player-target');
+  target.innerHTML = '';
+  target.removeAttribute('data-ready');
 
   if (ytApiReady && window.YT) {
     createYTPlayer(videoId);
   } else {
-    // API not ready yet — fall back to plain iframe, retry player creation
-    container.innerHTML = `
-      <iframe id="yt-iframe-fallback"
+    // YT API not ready yet — inject a plain iframe as fallback,
+    // then swap to the proper API player once it loads
+    target.innerHTML = `
+      <iframe
         src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3"
-        allow="autoplay; fullscreen" allowfullscreen></iframe>`;
-    // Keep polling until API is ready, then switch to proper player
+        allow="autoplay; fullscreen" allowfullscreen
+        style="position:absolute;inset:0;width:100%;height:100%;border:none;"></iframe>`;
     const poll = setInterval(() => {
       if (ytApiReady && window.YT && currentView === 'player' && currentVideoId === videoId) {
         clearInterval(poll);
-        container.innerHTML = '<div id="yt-player-target"></div>';
+        target.innerHTML = '';
         createYTPlayer(videoId);
       }
     }, 300);
@@ -1015,7 +1028,7 @@ async function submitToSheet(videoId, title) {
 function goBack() {
   if (currentView === 'player') {
     if (ytPlayer) { try { ytPlayer.stopVideo(); ytPlayer.destroy(); } catch {} ytPlayer = null; }
-    document.getElementById('player-container').innerHTML = '';
+    document.getElementById('yt-player-target').innerHTML = '';
     currentVideoId = null;
     const target = (prevView === 'channel' || prevView === 'search') ? prevView : 'home';
     currentView = target;
