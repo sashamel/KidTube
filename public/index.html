@@ -515,7 +515,7 @@
 <!-- HEADER -->
 <div id="header">
   <button id="back-btn" onclick="goBack()">&#8592;</button>
-  <div id="logo">🎬 KidTube</div>
+  <div id="logo">🎬 KidTube for Mishka NamNam 🧸</div>
   <button id="search-toggle" onclick="toggleSearch()" title="Search">🔍</button>
   <button id="settings-btn" onclick="openSettings()" title="Parent settings">⚙️</button>
 </div>
@@ -934,7 +934,7 @@ function playVideo(videoId, title, playlistIndex = -1) {
   document.getElementById('player-title').textContent = title;
   showView('player');
   document.getElementById('back-btn').classList.add('visible');
-  document.getElementById('logo').textContent = '🎬 KidTube';
+  document.getElementById('logo').textContent = '🎬 KidTube for Mishka NamNam 🧸';
 
   // Reset the player target div without touching the overlay
   const target = document.getElementById('yt-player-target');
@@ -1051,7 +1051,7 @@ function goHome() {
   currentPlaylistIndex = -1;
   showView('home');
   document.getElementById('back-btn').classList.remove('visible');
-  document.getElementById('logo').textContent = '🎬 KidTube';
+  document.getElementById('logo').textContent = '🎬 KidTube for Mishka NamNam 🧸';
   document.getElementById('search-bar').classList.remove('visible');
 }
 
