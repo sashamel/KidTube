@@ -736,7 +736,7 @@ async function fetchChannelVideos(channelId, maxResults = 30) {
     return [];
   }
 
-  // Basic filtering before the embeddable check
+  // Basic filtering before the embeddable/duration checks
   let items = (data.items || [])
     .map(item => ({
       videoId: item.snippet?.resourceId?.videoId || '',
@@ -752,32 +752,57 @@ async function fetchChannelVideos(channelId, maxResults = 30) {
         if (t.includes('#shorts') || t.includes('shorts')) return false;
       }
       if (v.title === 'Deleted video' || v.title === 'Private video') return false;
+      // Apply keyword allowlist if defined (same logic as search)
+      const allowlist = (config.keywords?.allowlist || []).map(w => w.toLowerCase());
+      if (allowlist.length) {
+        const t = v.title.toLowerCase();
+        if (!allowlist.some(w => t.includes(w))) return false;
+      }
       return true;
     });
 
-  // Step 2: filter to only embeddable videos using videos?part=status
-  // Batch all IDs in one call (1 quota unit regardless of count)
+  // Step 2: batch check embeddability AND duration in one call (1 quota unit)
   if (items.length > 0) {
     const ids = items.map(v => v.videoId).join(',');
     try {
       const statusRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?part=status&id=${ids}&key=${API_KEY}`
+        `https://www.googleapis.com/youtube/v3/videos?part=status,contentDetails&id=${ids}&key=${API_KEY}`
       );
       const statusData = await statusRes.json();
-      const embeddable = new Set(
-        (statusData.items || [])
-          .filter(v => v.status?.embeddable === true)
-          .map(v => v.id)
-      );
-      items = items.filter(v => embeddable.has(v.videoId));
+
+      const videoMeta = {};
+      (statusData.items || []).forEach(v => { videoMeta[v.id] = v; });
+
+      items = items.filter(v => {
+        const meta = videoMeta[v.id];
+        // Drop non-embeddable
+        if (!meta || meta.status?.embeddable !== true) return false;
+        // Drop shorts by duration (≤ 60 seconds) if blockShorts is on
+        if (config.blockShorts && meta.contentDetails?.duration) {
+          if (isShortDuration(meta.contentDetails.duration)) return false;
+        }
+        return true;
+      });
     } catch (e) {
-      console.warn('Embeddable check failed, skipping filter:', e.message);
+      console.warn('Video metadata check failed, skipping filter:', e.message);
       // Non-fatal: proceed without the filter
     }
   }
 
   // Shuffle so it's not always newest-first
   return shuffle(items).slice(0, maxResults);
+}
+
+/**
+ * Parse ISO 8601 duration (e.g. "PT45S", "PT1M30S") and return true if ≤ 60 seconds.
+ */
+function isShortDuration(iso) {
+  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!m) return false;
+  const hours = parseInt(m[1] || 0);
+  const mins  = parseInt(m[2] || 0);
+  const secs  = parseInt(m[3] || 0);
+  return (hours * 3600 + mins * 60 + secs) <= 60;
 }
 
 /** Fisher-Yates shuffle */
