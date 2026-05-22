@@ -743,6 +743,7 @@ async function fetchChannelVideos(channelId, maxResults = 30) {
       title:   item.snippet?.title || '',
       thumb:   item.snippet?.thumbnails?.medium?.url
             || item.snippet?.thumbnails?.default?.url || '',
+      description: item.snippet?.description || '',
     }))
     .filter(v => {
       if (!v.videoId) return false;
@@ -752,11 +753,10 @@ async function fetchChannelVideos(channelId, maxResults = 30) {
         if (t.includes('#shorts') || t.includes('shorts')) return false;
       }
       if (v.title === 'Deleted video' || v.title === 'Private video') return false;
-      // Apply keyword allowlist if defined (same logic as search)
       const allowlist = (config.keywords?.allowlist || []).map(w => w.toLowerCase());
       if (allowlist.length) {
-        const t = v.title.toLowerCase();
-        if (!allowlist.some(w => t.includes(w))) return false;
+        const haystack = (v.title + ' ' + v.description).toLowerCase();
+        if (!allowlist.some(w => haystack.includes(w))) return false;
       }
       return true;
     });
