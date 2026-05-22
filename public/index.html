@@ -748,7 +748,7 @@ async function fetchChannelVideos(channelId, maxResults = 30) {
   // - randomizeResults: collect 50, then return a random 30 from those that pass
   // - default: collect exactly 30, return all that pass
   const targetPool = config.randomizeResults ? 50 : maxResults;
-  const MAX_PAGES = 5;
+  const MAX_PAGES = 10;
 
   let items = [];
   let pageToken = null;
