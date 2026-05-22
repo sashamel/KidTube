@@ -774,7 +774,7 @@ async function fetchChannelVideos(channelId, maxResults = 30) {
       (statusData.items || []).forEach(v => { videoMeta[v.id] = v; });
 
       items = items.filter(v => {
-        const meta = videoMeta[v.id];
+        const meta = videoMeta[v.videoId];
         // Drop non-embeddable
         if (!meta || meta.status?.embeddable !== true) return false;
         // Drop shorts by duration (≤ 60 seconds) if blockShorts is on
