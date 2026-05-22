@@ -5,7 +5,7 @@
   "blacklistSheetUrl": "",
   "channels": [
     { "name": "Сказочный Патруль", "id": "UC_T5XbinlhZfQ9reWLAGjxw" },
-    { "name": "Союзмультфильм", "id": "UCHS2LM1n3f5cyL-ebgkqyLw" },
+    { "name": "Союзмультфильм", "id": "UCHS2LM1n3f5cyL-ebgkqyLw", "filterByTitleOnly": true },
     { "name": "Смешарики", "id": "UC5A-Wp9ujcr5g9sYagAafEA" },
     { "name": "Хочу знать все!", "id": "UC5YlTWCe5npJ_fZ6mCO6sBQ" },
     { "name": "Три Кота", "id": "UCdSaNPMpj-Vi_SF6_MAFpSw" },

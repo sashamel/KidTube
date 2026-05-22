@@ -736,6 +736,8 @@ async function fetchChannelVideos(channelId, maxResults = 30) {
     return [];
   }
 
+  const chConfig = config.channels.find(c => c.id === channelId) || {};
+
   // Basic filtering before the embeddable/duration checks
   let items = (data.items || [])
     .map(item => ({
@@ -755,7 +757,9 @@ async function fetchChannelVideos(channelId, maxResults = 30) {
       if (v.title === 'Deleted video' || v.title === 'Private video') return false;
       const allowlist = (config.keywords?.allowlist || []).map(w => w.toLowerCase());
       if (allowlist.length) {
-        const haystack = (v.title + ' ' + v.description).toLowerCase();
+        const haystack = (chConfig.filterByTitleOnly
+          ? v.title
+          : v.title + ' ' + v.description).toLowerCase();
         if (!allowlist.some(w => haystack.includes(w))) return false;
       }
       return true;
