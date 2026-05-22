@@ -21,5 +21,6 @@
     "allowlist": ["патруль", "погоди", "Простоквашино", "Чебурашка", "Смешарики", "Smeshariki", "знать", "Винтик", "кота", "Томас", "Мимимишки", "Пеппа", "Маша", "Кокомелон", "Фиксики", "Fixiki", "Леди", "Баг", "Cocomelon"],
     "blocklist": ["scary", "horror", "prank", "slime", "challenge", "страшно", "хоррор"]
   },
-  "blockShorts": true
+  "blockShorts": true,
+  "randomizeResults": false
 }

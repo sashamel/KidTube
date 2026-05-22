@@ -724,48 +724,70 @@ function uploadsPlaylistId(channelId) {
  */
 async function fetchChannelVideos(channelId, maxResults = 30) {
   const playlistId = uploadsPlaylistId(channelId);
-  // Step 1: get video IDs + snippets from the uploads playlist (1 quota unit)
-  const url = `https://www.googleapis.com/youtube/v3/playlistItems`
-    + `?part=snippet&playlistId=${playlistId}&maxResults=50&key=${API_KEY}`;
+  const chConfig = config.channels.find(c => c.id === channelId) || {};
+  const allowlist = (config.keywords?.allowlist || []).map(w => w.toLowerCase());
 
-  const res = await fetch(url);
-  const data = await res.json();
-
-  if (data.error) {
-    console.warn('playlistItems error:', data.error.message);
-    return [];
+  function passesFilter(v) {
+    if (!v.videoId) return false;
+    if (blacklist.includes(v.videoId)) return false;
+    if (config.blockShorts) {
+      const t = v.title.toLowerCase();
+      if (t.includes('#shorts') || t.includes('shorts')) return false;
+    }
+    if (v.title === 'Deleted video' || v.title === 'Private video') return false;
+    if (allowlist.length) {
+      const haystack = (chConfig.filterByTitleOnly
+        ? v.title
+        : v.title + ' ' + v.description).toLowerCase();
+      if (!allowlist.some(w => haystack.includes(w))) return false;
+    }
+    return true;
   }
 
-  const chConfig = config.channels.find(c => c.id === channelId) || {};
+  // How many passing videos to collect before the embeddable check:
+  // - randomizeResults: collect 50, then return a random 30 from those that pass
+  // - default: collect exactly 30, return all that pass
+  const targetPool = config.randomizeResults ? 50 : maxResults;
+  const MAX_PAGES = 5;
 
-  // Basic filtering before the embeddable/duration checks
-  let items = (data.items || [])
-    .map(item => ({
-      videoId: item.snippet?.resourceId?.videoId || '',
-      title:   item.snippet?.title || '',
-      thumb:   item.snippet?.thumbnails?.medium?.url
-            || item.snippet?.thumbnails?.default?.url || '',
-      description: item.snippet?.description || '',
-    }))
-    .filter(v => {
-      if (!v.videoId) return false;
-      if (blacklist.includes(v.videoId)) return false;
-      if (config.blockShorts) {
-        const t = v.title.toLowerCase();
-        if (t.includes('#shorts') || t.includes('shorts')) return false;
-      }
-      if (v.title === 'Deleted video' || v.title === 'Private video') return false;
-      const allowlist = (config.keywords?.allowlist || []).map(w => w.toLowerCase());
-      if (allowlist.length) {
-        const haystack = (chConfig.filterByTitleOnly
-          ? v.title
-          : v.title + ' ' + v.description).toLowerCase();
-        if (!allowlist.some(w => haystack.includes(w))) return false;
-      }
-      return true;
-    });
+  let items = [];
+  let pageToken = null;
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const url = `https://www.googleapis.com/youtube/v3/playlistItems`
+      + `?part=snippet&playlistId=${playlistId}&maxResults=50&key=${API_KEY}`
+      + (pageToken ? `&pageToken=${pageToken}` : '');
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.error) {
+      console.warn('playlistItems error:', data.error.message);
+      break;
+    }
+
+    const pageItems = (data.items || [])
+      .map(item => ({
+        videoId:     item.snippet?.resourceId?.videoId || '',
+        title:       item.snippet?.title || '',
+        thumb:       item.snippet?.thumbnails?.medium?.url
+                  || item.snippet?.thumbnails?.default?.url || '',
+        description: item.snippet?.description || '',
+      }))
+      .filter(passesFilter);
+
+    items = items.concat(pageItems);
+
+    if (items.length >= targetPool) break;
+
+    pageToken = data.nextPageToken || null;
+    if (!pageToken) break;
+  }
+
+  items = items.slice(0, targetPool);
 
   // Step 2: batch check embeddability AND duration in one call (1 quota unit)
+  // targetPool is at most 50, so always fits in a single API call.
   if (items.length > 0) {
     const ids = items.map(v => v.videoId).join(',');
     try {
@@ -793,7 +815,8 @@ async function fetchChannelVideos(channelId, maxResults = 30) {
     }
   }
 
-  // Shuffle so it's not always newest-first
+  // Shuffle so it's not always newest-first, then return up to maxResults.
+  // With randomizeResults the pool is 50, so shuffle gives genuine variety.
   return shuffle(items).slice(0, maxResults);
 }
 
